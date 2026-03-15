@@ -249,15 +249,75 @@ export function apply(ctx: Context, config: Config) {
         const result = (await fetchAPI('/api/scrape', 'POST', {
           scrolls,
           priority,
-        })) as TaskResult
+        })) as any
 
-        logInfo(`任务已添加`, { task_id: result.task_id, scrolls, priority })
+        const taskIndex = result.task_index ?? result.index ?? 0
+        logInfo(`任务已添加`, { task_index: taskIndex, scrolls, priority })
 
-        return `✅ 任务已添加到队列
+        let message = `✅ 任务已添加到队列
 📊 滚动次数: ${scrolls}
 ⚡ 优先级: ${priority}
 🕐 创建时间: ${result.created_at}
-📍 任务ID: ${result.task_id || '待分配'}`
+📍 任务ID: ${taskIndex}`
+
+        // 轮询等待任务完成（最多等待5分钟）
+        message += `\n⏳ 等待任务完成...`
+        
+        let completed = false
+        let attempts = 0
+        const maxAttempts = 300 // 5分钟，每秒检查一次
+
+        while (!completed && attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          attempts++
+
+          try {
+            const taskResult = (await fetchAPI(`/api/task/${taskIndex}`)) as TaskResult
+            
+            if (taskResult.status === 'completed') {
+              completed = true
+              logInfo(`任务已完成`, { task_index: taskIndex })
+              
+              message += `\n✅ 任务完成！\n`
+              
+              if (taskResult.result) {
+                message += `📈 统计数据:\n`
+                message += `  上升: ${taskResult.result.up_count}\n`
+                message += `  下降: ${taskResult.result.down_count}\n`
+                message += `  总计: ${taskResult.result.total_count}\n`
+                message += `  平均上升: ${taskResult.result.avg_up_percent}%\n`
+                message += `  平均下降: ${taskResult.result.avg_down_percent}%\n`
+              }
+
+              // 自动获取并显示图片
+              try {
+                logInfo(`自动获取任务图片`, { task_index: taskIndex })
+                const imageData = await fetchAPI(`/api/task/${taskIndex}/image`)
+                
+                if (imageData instanceof ArrayBuffer && session) {
+                  const blob = new Blob([imageData], { type: 'image/png' })
+                  const url = URL.createObjectURL(blob)
+                  await session.send(`<image url="${url}" />`)
+                  logInfo(`任务图片已发送`, { task_index: taskIndex })
+                }
+              } catch (imgError: any) {
+                logWarn(`自动获取图片失败`, imgError)
+              }
+            } else if (taskResult.status === 'failed') {
+              completed = true
+              logError(`任务失败`, { task_index: taskIndex, error: taskResult.error })
+              message += `\n❌ 任务失败: ${taskResult.error}`
+            }
+          } catch (pollError: any) {
+            logDebug(`轮询检查失败`, pollError)
+          }
+        }
+
+        if (!completed) {
+          message += `\n⚠️ 任务仍在处理中，请稍后使用 /task ${taskIndex} 查询结果`
+        }
+
+        return message
       } catch (error: any) {
         logError(`添加任务失败`, error)
         return `❌ 添加任务失败: ${error?.message || String(error)}`
