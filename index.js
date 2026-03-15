@@ -1,8 +1,43 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Config = exports.usage = exports.name = void 0;
 exports.apply = apply;
 const koishi_1 = require("koishi");
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 exports.name = 'steamdt-client';
 exports.usage = `
 SteamDT 异动数据爬虫客户端
@@ -10,8 +45,8 @@ SteamDT 异动数据爬虫客户端
 支持的指令：
 - /scrape [scrolls] [priority] - 添加爬取任务
 - /queue - 查看队列状态
-- /task [index] - 查看任务结果
-- /image [index] - 获取任务图片
+- /task [task_id] - 查看任务结果
+- /image [task_id] - 获取任务图片
 - /health - 健康检查
 - /steamdt test - 测试API连接
 `;
@@ -131,8 +166,27 @@ function apply(ctx, config) {
         throw lastError;
     }
     /**
+     * 保存图片到本地
+     */
+    async function saveImageLocally(imageData, taskId) {
+        try {
+            const tempDir = path.join(process.cwd(), 'temp_images');
+            // 确保目录存在
+            if (!fs.existsSync(tempDir)) {
+                fs.mkdirSync(tempDir, { recursive: true });
+            }
+            const imagePath = path.join(tempDir, `task_${taskId}_${Date.now()}.png`);
+            fs.writeFileSync(imagePath, Buffer.from(imageData));
+            logInfo(`图片已保存到本地`, { path: imagePath });
+            return imagePath;
+        }
+        catch (error) {
+            logError(`保存图片失败`, error);
+            return null;
+        }
+    }
+    /**
      * 指令：测试API连接
-     * 用法: /steamdt test
      */
     ctx.command('steamdt', 'SteamDT客户端')
         .subcommand('test', '测试API连接')
@@ -157,7 +211,6 @@ function apply(ctx, config) {
     });
     /**
      * 指令：添加爬取任务
-     * 用法: /scrape [scrolls] [priority]
      */
     ctx.command('scrape [scrolls:number] [priority:number]', '添加爬取任务')
         .option('scrolls', '-s <scrolls:number> 滚动次数，默认5')
@@ -175,31 +228,50 @@ function apply(ctx, config) {
                 logWarn(`参数验证失败: priority=${priority}`);
                 return '❌ 优先级必须在0-10之间';
             }
+            // 发送初始消息
+            if (session) {
+                await session.send('⏳ 正在添加任务到队列...');
+            }
             const result = (await fetchAPI('/api/scrape', 'POST', {
                 scrolls,
                 priority,
             }));
-            const taskIndex = result.task_index ?? result.index ?? 0;
-            logInfo(`任务已添加`, { task_index: taskIndex, scrolls, priority });
-            let message = `✅ 任务已添加到队列
-📊 滚动次数: ${scrolls}
-⚡ 优先级: ${priority}
-🕐 创建时间: ${result.created_at}
-📍 任务ID: ${taskIndex}`;
-            // 轮询等待任务完成（最多等待5分钟）
-            message += `\n⏳ 等待任务完成...`;
+            const taskId = result.task_id;
+            logInfo(`任务已添加`, { task_id: taskId, scrolls, priority });
+            let message = `✅ 任务已添加到队列\n`;
+            message += `📊 滚动次数: ${scrolls}\n`;
+            message += `⚡ 优先级: ${priority}\n`;
+            message += `🕐 创建时间: ${result.created_at}\n`;
+            message += `📍 任务ID: ${taskId}\n`;
+            message += `📋 队列长度: ${result.queue_length}`;
+            // 发送任务信息
+            if (session) {
+                await session.send(message);
+                await session.send('⏳ 正在处理任务，请稍候...');
+            }
+            // 轮询等待任务完成（最多等待10分钟）
             let completed = false;
             let attempts = 0;
-            const maxAttempts = 300; // 5分钟，每秒检查一次
+            const maxAttempts = 600;
+            let lastStatus = 'queued';
             while (!completed && attempts < maxAttempts) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 attempts++;
                 try {
-                    const taskResult = (await fetchAPI(`/api/task/${taskIndex}`));
+                    const taskResult = (await fetchAPI(`/api/task/${taskId}`));
+                    // 状态变化时发送消息
+                    if (taskResult.status !== lastStatus) {
+                        lastStatus = taskResult.status;
+                        if (taskResult.status === 'processing') {
+                            if (session) {
+                                await session.send('⚙️ 任务正在处理中...');
+                            }
+                        }
+                    }
                     if (taskResult.status === 'completed') {
                         completed = true;
-                        logInfo(`任务已完成`, { task_index: taskIndex });
-                        message += `\n✅ 任务完成！\n`;
+                        logInfo(`任务已完成`, { task_id: taskId });
+                        message = `✅ 任务完成！\n`;
                         if (taskResult.result) {
                             message += `📈 统计数据:\n`;
                             message += `  上升: ${taskResult.result.up_count}\n`;
@@ -208,25 +280,35 @@ function apply(ctx, config) {
                             message += `  平均上升: ${taskResult.result.avg_up_percent}%\n`;
                             message += `  平均下降: ${taskResult.result.avg_down_percent}%\n`;
                         }
-                        // 自动获取并显示图片
+                        if (session) {
+                            await session.send(message);
+                            await session.send('📥 正在获取图片...');
+                        }
+                        // 获取并保存图片到本地
                         try {
-                            logInfo(`自动获取任务图片`, { task_index: taskIndex });
-                            const imageData = await fetchAPI(`/api/task/${taskIndex}/image`);
-                            if (imageData instanceof ArrayBuffer && session) {
-                                const blob = new Blob([imageData], { type: 'image/png' });
-                                const url = URL.createObjectURL(blob);
-                                await session.send(`<image url="${url}" />`);
-                                logInfo(`任务图片已发送`, { task_index: taskIndex });
+                            logInfo(`获取任务图片`, { task_id: taskId });
+                            const imageData = await fetchAPI(`/api/task/${taskId}/image`);
+                            if (imageData instanceof ArrayBuffer) {
+                                const imagePath = await saveImageLocally(imageData, taskId);
+                                if (imagePath && session) {
+                                    await session.send(`<image url="file://${imagePath}" />`);
+                                    logInfo(`任务图片已发送`, { task_id: taskId, path: imagePath });
+                                }
                             }
                         }
                         catch (imgError) {
-                            logWarn(`自动获取图片失败`, imgError);
+                            logWarn(`获取或保存图片失败`, imgError);
+                            if (session) {
+                                await session.send(`⚠️ 获取图片失败: ${imgError?.message || String(imgError)}`);
+                            }
                         }
                     }
                     else if (taskResult.status === 'failed') {
                         completed = true;
-                        logError(`任务失败`, { task_index: taskIndex, error: taskResult.error });
-                        message += `\n❌ 任务失败: ${taskResult.error}`;
+                        logError(`任务失败`, { task_id: taskId, error: taskResult.error });
+                        if (session) {
+                            await session.send(`❌ 任务失败: ${taskResult.error}`);
+                        }
                     }
                 }
                 catch (pollError) {
@@ -234,18 +316,25 @@ function apply(ctx, config) {
                 }
             }
             if (!completed) {
-                message += `\n⚠️ 任务仍在处理中，请稍后使用 /task ${taskIndex} 查询结果`;
+                const msg = `⚠️ 任务仍在处理中，请稍后使用 /task ${taskId} 查询结果`;
+                if (session) {
+                    await session.send(msg);
+                }
+                return msg;
             }
-            return message;
+            return '';
         }
         catch (error) {
             logError(`添加任务失败`, error);
-            return `❌ 添加任务失败: ${error?.message || String(error)}`;
+            const msg = `❌ 添加任务失败: ${error?.message || String(error)}`;
+            if (session) {
+                await session.send(msg);
+            }
+            return msg;
         }
     });
     /**
      * 指令：查看队列状态
-     * 用法: /queue
      */
     ctx.command('queue', '查看队列状态').action(async ({ session }) => {
         try {
@@ -280,21 +369,23 @@ function apply(ctx, config) {
     });
     /**
      * 指令：查看任务结果
-     * 用法: /task [index]
      */
-    ctx.command('task [index:number]', '查看任务结果').action(async ({ session }, index) => {
+    ctx.command('task [task_id:number]', '查看任务结果').action(async ({ session }, task_id) => {
         try {
-            if (index === undefined) {
-                return '❌ 请指定任务索引，用法: /task <index>';
+            if (task_id === undefined) {
+                return '❌ 请指定任务ID，用法: /task <task_id>';
             }
-            logInfo(`查询任务结果`, { index });
-            const result = (await fetchAPI(`/api/task/${index}`));
-            let message = `📊 任务结果 #${index}\n`;
+            logInfo(`查询任务结果`, { task_id });
+            const result = (await fetchAPI(`/api/task/${task_id}`));
+            let message = `📊 任务结果 #${task_id}\n`;
             message += `━━━━━━━━━━━━━━━━━━━━━━\n`;
             message += `状态: ${result.status}\n`;
             message += `滚动次数: ${result.scrolls}\n`;
             message += `优先级: ${result.priority}\n`;
             message += `创建时间: ${result.created_at}\n`;
+            if (result.started_at) {
+                message += `开始时间: ${result.started_at}\n`;
+            }
             if (result.completed_at) {
                 message += `完成时间: ${result.completed_at}\n`;
             }
@@ -309,7 +400,7 @@ function apply(ctx, config) {
             if (result.error) {
                 message += `\n❌ 错误: ${result.error}\n`;
             }
-            logInfo('任务结果查询完成', { index, status: result.status });
+            logInfo('任务结果查询完成', { task_id, status: result.status });
             return message;
         }
         catch (error) {
@@ -319,26 +410,24 @@ function apply(ctx, config) {
     });
     /**
      * 指令：获取任务图片
-     * 用法: /image [index]
      */
-    ctx.command('image [index:number]', '获取任务图片').action(async ({ session }, index) => {
+    ctx.command('image [task_id:number]', '获取任务图片').action(async ({ session }, task_id) => {
         try {
-            if (index === undefined) {
-                return '❌ 请指定任务索引，用法: /image <index>';
+            if (task_id === undefined) {
+                return '❌ 请指定任务ID，用法: /image <task_id>';
             }
-            logInfo(`获取任务图片`, { index });
-            const result = await fetchAPI(`/api/task/${index}/image`);
+            logInfo(`获取任务图片`, { task_id });
+            const result = await fetchAPI(`/api/task/${task_id}/image`);
             if (result instanceof ArrayBuffer) {
-                const blob = new Blob([result], { type: 'image/png' });
-                const url = URL.createObjectURL(blob);
-                logInfo('任务图片已获取', { index, size: result.byteLength });
-                if (session) {
-                    await session.send(`<image url="${url}" />`);
+                const imagePath = await saveImageLocally(result, task_id);
+                if (imagePath && session) {
+                    await session.send(`<image url="file://${imagePath}" />`);
+                    logInfo('任务图片已获取并发送', { task_id, path: imagePath });
                 }
                 return '';
             }
             else {
-                logError('响应不是图片数据', { index });
+                logError('响应不是图片数据', { task_id });
                 return '❌ 获取图片失败';
             }
         }
@@ -349,7 +438,6 @@ function apply(ctx, config) {
     });
     /**
      * 指令：健康检查
-     * 用法: /health
      */
     ctx.command('health', '健康检查').action(async ({ session }) => {
         try {
@@ -371,7 +459,6 @@ function apply(ctx, config) {
     });
     /**
      * 指令：帮助信息
-     * 用法: /steamdt help
      */
     ctx.command('steamdt', 'SteamDT客户端')
         .subcommand('help', '显示帮助信息')
