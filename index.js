@@ -58,8 +58,12 @@ function apply(ctx, config) {
                 return data;
             }
             else if (contentType?.includes('image')) {
-                logger.debug(`收到图片数据，大小: ${response.headers.get('content-length')} bytes`);
-                return response;
+                const contentLength = response.headers.get('content-length');
+                logger.debug(`收到图片数据，大小: ${contentLength} bytes`);
+                // 立即读取图片数据以保持连接
+                const buffer = await response.arrayBuffer();
+                logger.debug(`图片数据已读取: ${buffer.byteLength} bytes`);
+                return buffer;
             }
             else {
                 return await response.text();
@@ -195,9 +199,8 @@ function apply(ctx, config) {
                 return '❌ 任务索引必须为非负数';
             }
             logger.info(`获取任务图片: index=${index}`);
-            const response = await fetchAPI(`/api/task/${index}/image`);
-            if (response instanceof Response) {
-                const buffer = await response.arrayBuffer();
+            const buffer = await fetchAPI(`/api/task/${index}/image`);
+            if (buffer instanceof ArrayBuffer) {
                 logger.info(`图片大小: ${buffer.byteLength} bytes`);
                 // 使用ctx.send发送图片
                 const base64 = Buffer.from(buffer).toString('base64');
@@ -209,7 +212,7 @@ function apply(ctx, config) {
                 return '';
             }
             else {
-                logger.error('响应不是Response对象');
+                logger.error('响应不是ArrayBuffer对象');
                 return '❌ 获取图片失败';
             }
         }
