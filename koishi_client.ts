@@ -18,9 +18,16 @@ export interface Config {
 }
 
 export const Config: Schema<Config> = Schema.object({
-  apiUrl: Schema.string().default('http://127.0.0.1:1145').description('API服务地址'),
-  timeout: Schema.number().default(30000).description('请求超时时间（毫秒）'),
-})
+  apiUrl: Schema.string()
+    .default('http://127.0.0.1:1145')
+    .description('API服务地址')
+    .role('url'),
+  timeout: Schema.number()
+    .default(30000)
+    .min(1000)
+    .max(300000)
+    .description('请求超时时间（毫秒）'),
+}).description('基础配置')
 
 const logger = new Logger('steamdt-client')
 

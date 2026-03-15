@@ -15,9 +15,16 @@ SteamDT 异动数据爬虫客户端
 - /health - 健康检查
 `;
 exports.Config = koishi_1.Schema.object({
-    apiUrl: koishi_1.Schema.string().default('http://127.0.0.1:1145').description('API服务地址'),
-    timeout: koishi_1.Schema.number().default(30000).description('请求超时时间（毫秒）'),
-});
+    apiUrl: koishi_1.Schema.string()
+        .default('http://127.0.0.1:1145')
+        .description('API服务地址')
+        .role('url'),
+    timeout: koishi_1.Schema.number()
+        .default(30000)
+        .min(1000)
+        .max(300000)
+        .description('请求超时时间（毫秒）'),
+}).description('基础配置');
 const logger = new koishi_1.Logger('steamdt-client');
 function apply(ctx, config) {
     const apiUrl = config.apiUrl.replace(/\/$/, '');
