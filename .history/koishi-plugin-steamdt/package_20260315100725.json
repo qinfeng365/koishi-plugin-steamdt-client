@@ -1,0 +1,30 @@
+{
+  "name": "koishi-plugin-steamdt",
+  "description": "SteamDT CS2 饰品异动数据查询插件",
+  "version": "1.0.0",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "keywords": [
+    "koishi",
+    "plugin",
+    "steamdt",
+    "cs2",
+    "steam"
+  ],
+  "peerDependencies": {
+    "koishi": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "koishi": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  }
+}

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SteamDT 异动数据查看器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .controls label {
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .controls input,
+        .controls select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .controls button {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+        
+        .controls button:hover {
+            background: #5568d3;
+        }
+        
+        .stats {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            padding: 20px 30px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        thead {
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            white-space: nowrap;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .time {
+            color: #666;
+            font-size: 13px;
+        }
+        
+        .price-up {
+            color: #ff4444;
+            font-weight: 600;
+        }
+        
+        .price-down {
+            color: #00aa00;
+            font-weight: 600;
+        }
+        
+        .price-neutral {
+            color: #666;
+            font-weight: 600;
+        }
+        
+        .trend-up {
+            background: #ffe6e6;
+            color: #ff4444;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .trend-down {
+            background: #e6ffe6;
+            color: #00aa00;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .trend-neutral {
+            background: #f0f0f0;
+            color: #666;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .item-img {
+            width: 40px;
+            height: 40px;
+            border-radius: 4px;
+            object-fit: cover;
+            background: #f0f0f0;
+        }
+        
+        .item-name {
+            font-weight: 500;
+            color: #333;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .price-cell {
+            text-align: right;
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+        
+        .percent {
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        
+        .footer {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+        }
+        
+        .pagination {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .pagination button:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .pagination button.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎮 SteamDT CS2 饰品异动数据</h1>
+            <p>实时监测 CS2 饰品价格变化</p>
+        </div>
+        
+        <div class="controls">
+            <label>搜索商品:</label>
+            <input type="text" id="searchInput" placeholder="输入商品名称...">
+            
+            <label>筛选趋势:</label>
+            <select id="trendFilter">
+                <option value="">全部</option>
+                <option value="up">上涨</option>
+                <option value="down">下跌</option>
+            </select>
+            
+            <button onclick="resetFilters()">重置筛选</button>
+            <button onclick="exportData()">导出 CSV</button>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-label">总数据条数</div>
+                <div class="stat-value" id="totalCount">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">上涨商品</div>
+                <div class="stat-value" style="color: #ff4444;" id="upCount">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">下跌商品</div>
+                <div class="stat-value" style="color: #00aa00;" id="downCount">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">平均涨幅</div>
+                <div class="stat-value" id="avgChange">0%</div>
+            </div>
+        </div>
+        
+        <div class="table-wrapper">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>图片</th>
+                        <th>时间</th>
+                        <th>商品名称</th>
+                        <th>旧价格</th>
+                        <th>新价格</th>
+                        <th>价格变化</th>
+                        <th>趋势</th>
+                        <th>变化百分比</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr><td colspan="8" class="loading">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="pagination" id="pagination"></div>
+        
+        <div class="footer">
+            <p>数据更新于: <span id="updateTime">-</span></p>
+        </div>
+    </div>
+    
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let currentPage = 1;
+        const itemsPerPage = 20;
+        
+        // 加载数据
+        async function loadData() {
+            try {
+                const response = await fetch('steamdt_changes.json');
+                allData = await response.json();
+                filteredData = [...allData];
+                
+                updateStats();
+                renderTable();
+                updatePagination();
+                
+                // 更新时间
+                if (allData.length > 0) {
+                    const lastItem = allData[0];
+                    const date = new Date(lastItem.scraped_at);
+                    document.getElementById('updateTime').textContent = date.toLocaleString('zh-CN');
+                }
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                document.getElementById('tableBody').innerHTML = 
+                    '<tr><td colspan="8" class="no-data">加载数据失败，请确保 steamdt_changes.json 文件存在</td></tr>';
+            }
+        }
+        
+        // 更新统计信息
+        function updateStats() {
+            document.getElementById('totalCount').textContent = filteredData.length;
+            
+            const upCount = filteredData.filter(item => item.price_trend === '上涨').length;
+            const downCount = filteredData.filter(item => item.price_trend === '下跌').length;
+            
+            document.getElementById('upCount').textContent = upCount;
+            document.getElementById('downCount').textContent = downCount;
+            
+            // 计算平均涨幅
+            const validPercents = filteredData
+                .filter(item => item.price_change_percent)
+                .map(item => parseFloat(item.price_change_percent));
+            
+            const avgChange = validPercents.length > 0 
+                ? (validPercents.reduce((a, b) => a + b, 0) / validPercents.length).toFixed(2)
+                : 0;
+            
+            document.getElementById('avgChange').textContent = avgChange + '%';
+        }
+        
+        // 渲染表格
+        function renderTable() {
+            const start = (currentPage - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageData = filteredData.slice(start, end);
+            
+            if (pageData.length === 0) {
+                document.getElementById('tableBody').innerHTML = 
+                    '<tr><td colspan="8" class="no-data">没有找到匹配的数据</td></tr>';
+                return;
+            }
+            
+            const html = pageData.map(item => {
+                const trendClass = item.price_trend === '上涨' ? 'trend-up' : 
+                                   item.price_trend === '下跌' ? 'trend-down' : 'trend-neutral';
+                const priceClass = item.price_trend === '上涨' ? 'price-up' : 
+                                   item.price_trend === '下跌' ? 'price-down' : 'price-neutral';
+                
+                return `
+                    <tr>
+                        <td><img src="${item.image_url}" alt="商品图片" class="item-img" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Crect fill=%22%23f0f0f0%22 width=%2240%22 height=%2240%22/%3E%3C/svg%3E'"></td>
+                        <td><span class="time">${item.timestamp}</span></td>
+                        <td><span class="item-name">${item.full_content.substring(0, 50)}</span></td>
+                        <td class="price-cell">¥${item.old_price}</td>
+                        <td class="price-cell">¥${item.new_price}</td>
+                        <td class="price-cell"><span class="${priceClass}">${item.price_change}</span></td>
+                        <td><span class="${trendClass}">${item.price_trend || '-'}</span></td>
+                        <td class="price-cell">${item.price_change_percent ? item.price_change_percent + '%' : '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+            
+            document.getElementById('tableBody').innerHTML = html;
+        }
+        
+        // 更新分页
+        function updatePagination() {
+            const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+            const pagination = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            // 上一页
+            html += `<button onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>上一页</button>`;
+            
+            // 页码
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                    html += `<button onclick="goToPage(${i})" class="${i === currentPage ? 'active' : ''}">${i}</button>`;
+                } else if (i === currentPage - 3 || i === currentPage + 3) {
+                    html += `<button disabled>...</button>`;
+                }
+            }
+            
+            // 下一页
+            html += `<button onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>下一页</button>`;
+            
+            pagination.innerHTML = html;
+        }
+        
+        // 跳转页面
+        function goToPage(page) {
+            const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+            if (page >= 1 && page <= totalPages) {
+                currentPage = page;
+                renderTable();
+                updatePagination();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+        
+        // 搜索
+        document.getElementById('searchInput').addEventListener('input', function() {
+            const keyword = this.value.toLowerCase();
+            filteredData = allData.filter(item => 
+                item.full_content.toLowerCase().includes(keyword)
+            );
+            currentPage = 1;
+            updateStats();
+            renderTable();
+            updatePagination();
+        });
+        
+        // 筛选趋势
+        document.getElementById('trendFilter').addEventListener('change', function() {
+            const trend = this.value;
+            const keyword = document.getElementById('searchInput').value.toLowerCase();
+            
+            filteredData = allData.filter(item => {
+                const matchKeyword = keyword === '' || item.full_content.toLowerCase().includes(keyword);
+                const matchTrend = trend === '' || item.price_trend === (trend === 'up' ? '上涨' : '下跌');
+                return matchKeyword && matchTrend;
+            });
+            
+            currentPage = 1;
+            updateStats();
+            renderTable();
+            updatePagination();
+        });
+        
+        // 重置筛选
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('trendFilter').value = '';
+            filteredData = [...allData];
+            currentPage = 1;
+            updateStats();
+            renderTable();
+            updatePagination();
+        }
+        
+        // 导出 CSV
+        function exportData() {
+            let csv = '时间,商品,旧价格,新价格,价格变化,趋势,变化百分比\n';
+            
+            filteredData.forEach(item => {
+                csv += `"${item.timestamp}","${item.full_content.substring(0, 50)}","${item.old_price}","${item.new_price}","${item.price_change}","${item.price_trend}","${item.price_change_percent}"\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `steamdt_changes_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // 页面加载完成后加载数据
+        window.addEventListener('load', loadData);
+    </script>
+</body>
+</html>

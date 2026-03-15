@@ -1,0 +1,32 @@
+{
+  "name": "koishi-plugin-steamdt-client",
+  "description": "SteamDT 异动数据爬虫 Koishi 客户端插件",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "koishi",
+    "plugin",
+    "steamdt",
+    "scraper"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "koishi": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "koishi": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
