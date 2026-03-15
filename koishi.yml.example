@@ -1,0 +1,18 @@
+# koishi.yml - SteamDT客户端配置示例
+
+# Koishi基础配置
+host: 127.0.0.1
+port: 5140
+
+# 插件配置
+plugins:
+  # SteamDT客户端插件
+  steamdt-client:
+    # API服务地址
+    apiUrl: http://127.0.0.1:1145
+    # 请求超时时间（毫秒）
+    timeout: 30000
+
+  # 其他必要的Koishi插件
+  console: {}
+  database: {}

@@ -1,0 +1,50 @@
+{
+  "name": "koishi-plugin-steamdt-client",
+  "description": "SteamDT 异动数据爬虫 Koishi 客户端插件",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "KOISHI_CLIENT_README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "koishi",
+    "plugin",
+    "steamdt",
+    "scraper",
+    "cs2",
+    "market",
+    "api-client"
+  ],
+  "author": "SteamDT Contributors",
+  "license": "MIT",
+  "homepage": "https://github.com/yourusername/koishi-plugin-steamdt-client",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/koishi-plugin-steamdt-client.git"
+  },
+  "peerDependencies": {
+    "koishi": "^4.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "koishi": "^4.3.2",
+    "typescript": "^5.0.0"
+  },
+  "koishi": {
+    "description": {
+      "en": "SteamDT market data scraper client for Koishi. Provides commands to manage scraping tasks, view queue status, and retrieve market data.",
+      "zh": "SteamDT市场数据爬虫Koishi客户端。提供指令来管理爬取任务、查看队列状态和获取市场数据。"
+    },
+    "service": {
+      "required": [],
+      "optional": []
+    }
+  }
+}
