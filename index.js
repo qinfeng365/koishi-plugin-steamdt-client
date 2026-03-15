@@ -29,12 +29,14 @@ const logger = new koishi_1.Logger('steamdt-client');
 function apply(ctx, config) {
     const apiUrl = config.apiUrl.replace(/\/$/, '');
     const timeout = config.timeout;
+    logger.info(`SteamDT客户端已加载，API地址: ${apiUrl}`);
     /**
      * 发送HTTP请求的辅助函数
      */
     async function fetchAPI(endpoint, method = 'GET', body) {
         try {
             const url = `${apiUrl}${endpoint}`;
+            logger.debug(`[${method}] ${url}`);
             const options = {
                 method,
                 timeout,
@@ -51,9 +53,12 @@ function apply(ctx, config) {
             }
             const contentType = response.headers.get('content-type');
             if (contentType?.includes('application/json')) {
-                return await response.json();
+                const data = await response.json();
+                logger.debug(`响应: ${JSON.stringify(data).substring(0, 100)}...`);
+                return data;
             }
             else if (contentType?.includes('image')) {
+                logger.debug(`收到图片数据，大小: ${response.headers.get('content-length')} bytes`);
                 return response;
             }
             else {
@@ -76,16 +81,20 @@ function apply(ctx, config) {
         try {
             scrolls = scrolls ?? 5;
             priority = priority ?? 0;
+            logger.info(`添加任务: scrolls=${scrolls}, priority=${priority}`);
             if (scrolls < 1 || scrolls > 100) {
+                logger.warn(`参数验证失败: scrolls=${scrolls}`);
                 return '❌ 滚动次数必须在1-100之间';
             }
             if (priority < 0 || priority > 10) {
+                logger.warn(`参数验证失败: priority=${priority}`);
                 return '❌ 优先级必须在0-10之间';
             }
             const result = (await fetchAPI('/api/scrape', 'POST', {
                 scrolls,
                 priority,
             }));
+            logger.info(`任务已添加: ${result.task_id || 'pending'}`);
             return `✅ 任务已添加到队列
 📊 滚动次数: ${scrolls}
 ⚡ 优先级: ${priority}
@@ -93,6 +102,7 @@ function apply(ctx, config) {
 📍 任务ID: ${result.task_id || '待分配'}`;
         }
         catch (error) {
+            logger.error(`添加任务失败: ${error?.message || String(error)}`);
             return `❌ 添加任务失败: ${error?.message || String(error)}`;
         }
     });
@@ -102,6 +112,7 @@ function apply(ctx, config) {
      */
     ctx.command('queue', '查看队列状态').action(async ({ session }) => {
         try {
+            logger.info('查询队列状态');
             const result = (await fetchAPI('/api/queue'));
             let message = '📋 队列状态\n';
             message += `━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -122,9 +133,11 @@ function apply(ctx, config) {
                     message += `  ... 还有 ${result.queue.length - 5} 个任务\n`;
                 }
             }
+            logger.info(`队列状态: 长度=${result.queue_length}, 已完成=${result.completed_count}`);
             return message;
         }
         catch (error) {
+            logger.error(`获取队列状态失败: ${error?.message || String(error)}`);
             return `❌ 获取队列状态失败: ${error?.message || String(error)}`;
         }
     });
@@ -136,8 +149,10 @@ function apply(ctx, config) {
         .action(async ({ session }, index) => {
         try {
             if (index < 0) {
+                logger.warn(`参数验证失败: index=${index}`);
                 return '❌ 任务索引必须为非负数';
             }
+            logger.info(`查询任务结果: index=${index}`);
             const result = (await fetchAPI(`/api/task/${index}`));
             let message = `📊 任务 #${index} 结果\n`;
             message += `━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -160,9 +175,11 @@ function apply(ctx, config) {
             else if (result.status === 'failed') {
                 message += `错误: ${result.error}\n`;
             }
+            logger.info(`任务 #${index} 状态: ${result.status}`);
             return message;
         }
         catch (error) {
+            logger.error(`获取任务结果失败: ${error?.message || String(error)}`);
             return `❌ 获取任务结果失败: ${error?.message || String(error)}`;
         }
     });
@@ -174,19 +191,30 @@ function apply(ctx, config) {
         .action(async ({ session }, index) => {
         try {
             if (index < 0) {
+                logger.warn(`参数验证失败: index=${index}`);
                 return '❌ 任务索引必须为非负数';
             }
+            logger.info(`获取任务图片: index=${index}`);
             const response = await fetchAPI(`/api/task/${index}/image`);
             if (response instanceof Response) {
                 const buffer = await response.arrayBuffer();
+                logger.info(`图片大小: ${buffer.byteLength} bytes`);
+                // 使用ctx.send发送图片
                 const base64 = Buffer.from(buffer).toString('base64');
-                return `<image url="data:image/png;base64,${base64}" />`;
+                const imageUrl = `data:image/png;base64,${base64}`;
+                logger.info(`发送图片消息`);
+                if (session) {
+                    await session.send(`<image url="${imageUrl}" />`);
+                }
+                return '';
             }
             else {
+                logger.error('响应不是Response对象');
                 return '❌ 获取图片失败';
             }
         }
         catch (error) {
+            logger.error(`获取任务图片失败: ${error?.message || String(error)}`);
             return `❌ 获取任务图片失败: ${error?.message || String(error)}`;
         }
     });
@@ -196,6 +224,7 @@ function apply(ctx, config) {
      */
     ctx.command('health', '健康检查').action(async ({ session }) => {
         try {
+            logger.info('执行健康检查');
             const result = (await fetchAPI('/health'));
             let message = '🏥 服务健康检查\n';
             message += `━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -203,9 +232,11 @@ function apply(ctx, config) {
             message += `队列长度: ${result.queue_length}\n`;
             message += `已完成任务: ${result.completed_tasks}\n`;
             message += `时间戳: ${result.timestamp}\n`;
+            logger.info(`服务状态: ${result.status}`);
             return message;
         }
         catch (error) {
+            logger.error(`健康检查失败: ${error?.message || String(error)}`);
             return `❌ 健康检查失败: ${error?.message || String(error)}`;
         }
     });
@@ -216,9 +247,9 @@ function apply(ctx, config) {
     ctx.command('steamdt', 'SteamDT客户端')
         .subcommand('help', '显示帮助信息')
         .action(async ({ session }) => {
+        logger.info('显示帮助信息');
         return exports.usage;
     });
-    logger.info('SteamDT客户端已加载');
-    logger.info(`API服务地址: ${apiUrl}`);
+    logger.info('SteamDT客户端初始化完成');
 }
 //# sourceMappingURL=koishi_client.js.map
