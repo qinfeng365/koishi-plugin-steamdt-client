@@ -2,8 +2,8 @@
   "name": "koishi-plugin-steamdt-client",
   "description": "SteamDT 异动数据爬虫 Koishi 客户端插件",
   "version": "1.0.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "index.js",
+  "types": "index.d.ts",
   "files": [
     "dist",
     "KOISHI_CLIENT_README.md"
