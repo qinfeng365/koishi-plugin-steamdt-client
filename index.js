@@ -291,7 +291,11 @@ function apply(ctx, config) {
                             if (imageData instanceof ArrayBuffer) {
                                 const imagePath = await saveImageLocally(imageData, taskId);
                                 if (imagePath && session) {
-                                    await session.send(`<image url="file://${imagePath}" />`);
+                                    // 转换为 base64 用于发送
+                                    const fs = await Promise.resolve().then(() => __importStar(require('fs')));
+                                    const imageBuffer = fs.readFileSync(imagePath);
+                                    const base64Data = imageBuffer.toString('base64');
+                                    await session.send(`<image url="data:image/png;base64,${base64Data}" />`);
                                     logInfo(`任务图片已发送`, { task_id: taskId, path: imagePath });
                                 }
                             }
